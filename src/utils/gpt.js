@@ -1,5 +1,4 @@
 const API_KEY = process.env.REACT_APP_OPENAI_API_KEY;
-console.log("API KEY:", process.env.REACT_APP_OPENAI_API_KEY);
 
 export async function getGPTAnalysis(indicatorSummary) {
   try {
@@ -14,11 +13,12 @@ export async function getGPTAnalysis(indicatorSummary) {
         messages: [
           {
             role: "system",
-            content: "당신은 전문 암호화폐 분석가입니다. 주어진 기술적 지표 요약을 바탕으로 매수/매도 관점에서 투자자에게 설명해주세요.",
+            content:
+              "당신은 전문 암호화폐 분석가입니다. 주어진 기술적 지표 요약을 바탕으로 매수/매도 관점에서 투자자에게 설명해주세요.",
           },
           {
             role: "user",
-            content: indicatorSummary,
+            content: typeof indicatorSummary === "string" ? indicatorSummary : JSON.stringify(indicatorSummary),
           },
         ],
         temperature: 0.7,
