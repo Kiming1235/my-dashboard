@@ -3,7 +3,6 @@ import { fetchCandleData } from './hooks/useCandles';
 import { calculateRSI, calculateEMA, calculateMACD } from './utils/indicators';
 import { getAdvice } from './utils/advisor';
 import { getGPTAnalysis } from './utils/gpt';
-import { BinanceChart } from './BinanceChart'; // 차트 컴포넌트 import
 
 const TIMEFRAMES = [
   { label: "1분봉", value: "1m" },
@@ -83,10 +82,6 @@ function App() {
 
       <div style={{ marginTop: 20 }}>
         <button onClick={loadIndicators}>📊 분석 시작</button>
-      </div>
-
-      <div style={{ marginTop: "40px" }}>
-        <BinanceChart symbol="BTCUSDT" interval={selectedFrame} />
       </div>
 
       {Object.entries(results).map(([frame, res]) => (
