@@ -1,9 +1,9 @@
-// App.js
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { fetchCandleData } from './hooks/useCandles';
 import { calculateRSI, calculateEMA, calculateMACD } from './utils/indicators';
 import { getAdvice } from './utils/advisor';
 import { getGPTAnalysis } from './utils/gpt';
+import { BinanceChart } from './BinanceChart'; // 차트 컴포넌트 import
 
 const TIMEFRAMES = [
   { label: "1분봉", value: "1m" },
@@ -15,7 +15,7 @@ const TIMEFRAMES = [
 ];
 
 function App() {
-  const [selectedFrame, setSelectedFrame] = useState("5m"); // 단일 선택
+  const [selectedFrame, setSelectedFrame] = useState("5m");
   const [results, setResults] = useState({});
 
   const loadIndicators = async () => {
@@ -83,6 +83,10 @@ function App() {
 
       <div style={{ marginTop: 20 }}>
         <button onClick={loadIndicators}>📊 분석 시작</button>
+      </div>
+
+      <div style={{ marginTop: "40px" }}>
+        <BinanceChart symbol="BTCUSDT" interval={selectedFrame} />
       </div>
 
       {Object.entries(results).map(([frame, res]) => (
