@@ -15,66 +15,54 @@ const TIMEFRAMES = [
 ];
 
 function App() {
-  const [selectedFrames, setSelectedFrames] = useState(["5m"]); // 기본값 5분봉
+  const [selectedFrame, setSelectedFrame] = useState("5m"); // 단일 선택
   const [results, setResults] = useState({});
 
-  const toggleTimeframe = (value) => {
-    setSelectedFrames((prev) =>
-      prev.includes(value)
-        ? prev.filter((v) => v !== value)
-        : [...prev, value]
-    );
-  };
-
   const loadIndicators = async () => {
-    const tempResults = {};
+    const closes = await fetchCandleData("BTCUSDT", selectedFrame, 100);
+    if (!closes || closes.length < 30) return;
 
-    for (const frame of selectedFrames) {
-      const closes = await fetchCandleData("BTCUSDT", frame, 100);
-      if (!closes || closes.length < 30) continue;
+    const rsiValues = calculateRSI(closes);
+    const { histogram } = calculateMACD(closes);
+    const emaShort = calculateEMA(closes, 12);
+    const emaLong = calculateEMA(closes, 26);
 
-      const rsiValues = calculateRSI(closes);
-      const { histogram } = calculateMACD(closes);
-      const emaShort = calculateEMA(closes, 12);
-      const emaLong = calculateEMA(closes, 26);
+    const latestRSI = rsiValues.at(-1);
+    const latestMACD = histogram.at(-1);
+    const latestEMA12 = emaShort.at(-1);
+    const latestEMA26 = emaLong.at(-1);
 
-      const latestRSI = rsiValues.at(-1);
-      const latestMACD = histogram.at(-1);
-      const latestEMA12 = emaShort.at(-1);
-      const latestEMA26 = emaLong.at(-1);
+    if (
+      latestRSI === undefined ||
+      latestMACD === undefined ||
+      latestEMA12 === undefined ||
+      latestEMA26 === undefined
+    ) return;
 
-      if (
-        latestRSI === undefined ||
-        latestMACD === undefined ||
-        latestEMA12 === undefined ||
-        latestEMA26 === undefined
-      ) continue;
+    const advice = getAdvice({
+      rsi: latestRSI,
+      macdHist: latestMACD,
+      emaShort: latestEMA12,
+      emaLong: latestEMA26,
+    });
 
-      const advice = getAdvice({
-        rsi: latestRSI,
-        macdHist: latestMACD,
-        emaShort: latestEMA12,
-        emaLong: latestEMA26,
-      });
+    const gptText = await getGPTAnalysis({
+      rsi: latestRSI.toFixed(2),
+      macdHist: latestMACD.toFixed(4),
+      emaShort: latestEMA12.toFixed(2),
+      emaLong: latestEMA26.toFixed(2),
+    });
 
-      const gptText = await getGPTAnalysis({
-        rsi: latestRSI.toFixed(2),
-        macdHist: latestMACD.toFixed(4),
-        emaShort: latestEMA12.toFixed(2),
-        emaLong: latestEMA26.toFixed(2),
-      });
-
-      tempResults[frame] = {
+    setResults({
+      [selectedFrame]: {
         rsi: latestRSI.toFixed(2),
         macdHist: latestMACD.toFixed(4),
         ema12: latestEMA12.toFixed(2),
         ema26: latestEMA26.toFixed(2),
         advice,
         gptText,
-      };
-    }
-
-    setResults(tempResults);
+      },
+    });
   };
 
   return (
@@ -85,9 +73,10 @@ function App() {
       {TIMEFRAMES.map((tf) => (
         <label key={tf.value} style={{ marginRight: "12px" }}>
           <input
-            type="checkbox"
-            checked={selectedFrames.includes(tf.value)}
-            onChange={() => toggleTimeframe(tf.value)}
+            type="radio"
+            name="timeframe"
+            checked={selectedFrame === tf.value}
+            onChange={() => setSelectedFrame(tf.value)}
           /> {tf.label}
         </label>
       ))}
