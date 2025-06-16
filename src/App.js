@@ -1,113 +1,114 @@
-import React, { useState } from 'react';
-import { fetchCandleData } from './hooks/useCandles';
+// src/App.js
+import React, { useEffect, useState } from 'react';
+import { fetchCandleData, fetchAllSymbols } from './hooks/useCandles';
 import { calculateRSI, calculateEMA, calculateMACD } from './utils/indicators';
 import { getAdvice } from './utils/advisor';
 import { getGPTAnalysis } from './utils/gpt';
 
-const TIMEFRAMES = [
-  { label: "1분봉", value: "1m" },
-  { label: "5분봉", value: "5m" },
-  { label: "15분봉", value: "15m" },
-  { label: "30분봉", value: "30m" },
-  { label: "4시간봉", value: "4h" },
-  { label: "1일봉", value: "1d" },
-];
-
 function App() {
-  const [selectedFrame, setSelectedFrame] = useState("5m");
-  const [results, setResults] = useState({});
+  const [signals, setSignals] = useState({ buy: [], sell: [], neutral: [] });
+  const [loading, setLoading] = useState(false);
+  const [selectedSymbol, setSelectedSymbol] = useState(null);
+  const [gptResult, setGptResult] = useState("");
 
-  const loadIndicators = async () => {
-    const closes = await fetchCandleData("BTCUSDT", selectedFrame, 100);
-    if (!closes || closes.length < 30) return;
+  const loadSignals = async () => {
+    setLoading(true);
+    const allSymbols = await fetchAllSymbols();
+    const filteredSymbols = allSymbols.slice(0, 30); // 상위 30개만 분석
+    const buy = [];
+    const sell = [];
+    const neutral = [];
 
-    const rsiValues = calculateRSI(closes);
-    const { histogram } = calculateMACD(closes);
-    const emaShort = calculateEMA(closes, 12);
-    const emaLong = calculateEMA(closes, 26);
+    for (const symbol of filteredSymbols) {
+      try {
+        const candles = await fetchCandleData(symbol, "15m", 100);
+        const closes = candles.map(c => c.close);
+        if (closes.length < 30) continue;
 
-    const latestRSI = rsiValues.at(-1);
-    const latestMACD = histogram.at(-1);
-    const latestEMA12 = emaShort.at(-1);
-    const latestEMA26 = emaLong.at(-1);
+        const rsi = calculateRSI(closes).at(-1);
+        const { histogram } = calculateMACD(closes);
+        const macdHist = histogram.at(-1);
+        const ema12 = calculateEMA(closes, 12).at(-1);
+        const ema26 = calculateEMA(closes, 26).at(-1);
 
-    if (
-      latestRSI === undefined ||
-      latestMACD === undefined ||
-      latestEMA12 === undefined ||
-      latestEMA26 === undefined
-    ) return;
+        const advice = getAdvice({ rsi, macdHist, emaShort: ema12, emaLong: ema26 });
 
-    const advice = getAdvice({
-      rsi: latestRSI,
-      macdHist: latestMACD,
-      emaShort: latestEMA12,
-      emaLong: latestEMA26,
-    });
+        const entry = { symbol, rsi, macdHist, ema12, ema26 };
 
+        if (advice.recommendation === "매수") buy.push(entry);
+        else if (advice.recommendation === "매도") sell.push(entry);
+        else neutral.push(entry);
+      } catch (err) {
+        console.warn(symbol + ' 분석 실패:', err);
+        continue;
+      }
+    }
+
+    setSignals({ buy, sell, neutral });
+    setLoading(false);
+  };
+
+  const handleSymbolClick = async (entry) => {
+    setSelectedSymbol(entry.symbol);
+    setGptResult("분석 중...");
     const gptText = await getGPTAnalysis({
-      rsi: latestRSI.toFixed(2),
-      macdHist: latestMACD.toFixed(4),
-      emaShort: latestEMA12.toFixed(2),
-      emaLong: latestEMA26.toFixed(2),
+      rsi: entry.rsi.toFixed(2),
+      macdHist: entry.macdHist.toFixed(4),
+      emaShort: entry.ema12.toFixed(2),
+      emaLong: entry.ema26.toFixed(2)
     });
-
-    setResults({
-      [selectedFrame]: {
-        rsi: latestRSI.toFixed(2),
-        macdHist: latestMACD.toFixed(4),
-        ema12: latestEMA12.toFixed(2),
-        ema26: latestEMA26.toFixed(2),
-        advice,
-        gptText,
-      },
-    });
+    setGptResult(gptText);
   };
 
   return (
-    <div style={{ padding: "40px", fontFamily: "Arial" }}>
-      <h1>🤖 AI 트레이딩 분석</h1>
+    <div style={{ padding: 40, fontFamily: "Arial" }}>
+      <h1>📊 15분봉 기준 롱/숏 신호 코인</h1>
+      <button onClick={loadSignals} disabled={loading}>
+        {loading ? "분석 중..." : "🔍 신호 분석하기"}
+      </button>
 
-      <h2>🕒 시간 프레임 선택</h2>
-      {TIMEFRAMES.map((tf) => (
-        <label key={tf.value} style={{ marginRight: "12px" }}>
-          <input
-            type="radio"
-            name="timeframe"
-            checked={selectedFrame === tf.value}
-            onChange={() => setSelectedFrame(tf.value)}
-          /> {tf.label}
-        </label>
-      ))}
-
-      <div style={{ marginTop: 20 }}>
-        <button onClick={loadIndicators}>📊 분석 시작</button>
+      <div style={{ marginTop: 30, padding: 10, background: "#f2f2f2", borderRadius: 8 }}>
+        <p>📦 총 분석 코인 수: {signals.buy.length + signals.sell.length + signals.neutral.length}</p>
+        <p>🟢 매수 신호: {signals.buy.length}</p>
+        <p>🔴 매도 신호: {signals.sell.length}</p>
+        <p>⏸️ 관망 신호: {signals.neutral.length}</p>
       </div>
 
-      {Object.entries(results).map(([frame, res]) => (
-        <div key={frame} style={{ marginTop: "40px" }}>
-          <h2>📈 {TIMEFRAMES.find(f => f.value === frame)?.label} 결과</h2>
-          <p>RSI: {res.rsi}</p>
-          <p>MACD 히스토그램: {res.macdHist}</p>
-          <p>EMA(12): {res.ema12}</p>
-          <p>EMA(26): {res.ema26}</p>
+      <div style={{ marginTop: 30 }}>
+        <h2>🟢 매수 신호</h2>
+        {signals.buy.length === 0 ? <p>없음</p> : (
+          <ul>
+            {signals.buy.map((s, idx) => (
+              <li key={idx} style={{ cursor: 'pointer', color: '#007bff' }} onClick={() => handleSymbolClick(s)}>{s.symbol}</li>
+            ))}
+          </ul>
+        )}
 
-          <div style={{ marginTop: "20px", padding: "16px", border: "1px solid #ccc", borderRadius: "10px" }}>
-            <h3>💡 AI 판단</h3>
-            <p><strong>추천:</strong> {res.advice.recommendation}</p>
-            <ul>
-              {res.advice.reasons.map((reason, idx) => (
-                <li key={idx}>{reason}</li>
-              ))}
-            </ul>
-          </div>
+        <h2>🔴 매도 신호</h2>
+        {signals.sell.length === 0 ? <p>없음</p> : (
+          <ul>
+            {signals.sell.map((s, idx) => (
+              <li key={idx} style={{ cursor: 'pointer', color: '#d63333' }} onClick={() => handleSymbolClick(s)}>{s.symbol}</li>
+            ))}
+          </ul>
+        )}
 
-          <div style={{ marginTop: "20px", background: "#f9f9f9", padding: "16px", borderRadius: "10px" }}>
-            <h3>🧠 GPT 분석 요약</h3>
-            <p style={{ whiteSpace: "pre-wrap" }}>{res.gptText}</p>
-          </div>
+        <h2>⏸️ 관망 신호</h2>
+        {signals.neutral.length === 0 ? <p>없음</p> : (
+          <ul>
+            {signals.neutral.map((s, idx) => (
+              <li key={idx} style={{ cursor: 'pointer', color: '#666' }} onClick={() => handleSymbolClick(s)}>{s.symbol}</li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {selectedSymbol && (
+        <div style={{ marginTop: 40, background: '#f9f9f9', padding: 20, borderRadius: 10 }}>
+          <h2>🧠 GPT 분석 요약 - {selectedSymbol}</h2>
+          <p style={{ whiteSpace: 'pre-wrap' }}>{gptResult}</p>
         </div>
-      ))}
+      )}
     </div>
   );
 }
