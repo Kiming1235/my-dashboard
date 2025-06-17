@@ -110,7 +110,7 @@ function App() {
             {list.length===0? <p>없음</p> : (
               <ul>
                 {list.map(s => (
-                  <li key={s} style={{ cursor:'pointer', color }} onClick={()=>alert(summaries[s]||'')}>
+                  <li key={s} style={{ cursor:'pointer', color }} onClick={()=>alert(gptSummaries[s]||'')}>
                     {s}
                   </li>
                 ))}
