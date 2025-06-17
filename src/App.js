@@ -42,11 +42,23 @@ function App() {
         const ema26 = calculateEMA(closes, 26).at(-1);
 
         newMetrics[sym] = { rsi, macdHist, emaShort: ema12, emaLong: ema26 };
-        const advice = getAdvice(newMetrics[sym]);
+        // GPT에게 판단 분류를 맡깁니다
+const gptText = await getGPTAnalysis({
+  rsi: newMetrics[sym].rsi.toFixed(2),
+  macdHist: newMetrics[sym].macdHist.toFixed(4),
+  emaShort: newMetrics[sym].emaShort.toFixed(2),
+  emaLong: newMetrics[sym].emaLong.toFixed(2)
+});
+summaries[sym] = gptText;
 
-        if (advice.recommendation === '롱') longs.push(sym);
-        else if (advice.recommendation === '숏') shorts.push(sym);
-        else hold.push(sym);
+// '판단: 롱/숏/관망' 파싱
+const match = gptText.match(/판단:\s*(롱|숏|관망)/);
+const decision = match ? match[1] : '관망';
+
+if (decision === '롱') longs.push(sym);
+else if (decision === '숏') shorts.push(sym);
+else hold.push(sym);
+
       } catch (e) {
         console.warn(sym, '분석 실패', e);
       }
