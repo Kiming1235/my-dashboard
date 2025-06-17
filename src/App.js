@@ -8,7 +8,7 @@ import { getGPTAnalysis } from './utils/gpt';
 // 거래 모드별 시간 프레임 옵션
 const TIMEFRAME_OPTIONS = {
   short: ["1m", "5m", "15m", "30m"],
-  long: ["1h", "4h", "1d"]
+  long:  ["1h", "4h", "1d"]
 };
 
 function App() {
@@ -17,17 +17,20 @@ function App() {
   const [signals, setSignals] = useState({ buy: [], sell: [], hold: [] });
   const [gptSummaries, setGptSummaries] = useState({});
   const [loading, setLoading] = useState(false);
+  const [selectedSymbol, setSelectedSymbol] = useState(null); // 인라인 표시할 심볼
 
   const loadSignals = async () => {
     setLoading(true);
     const allSymbols = await fetchAllSymbols();
-    const filteredSymbols = allSymbols.slice(0,10); // 상위 10개만 분석
-    const buy = [], sell = [], hold = [];
+    const filteredSymbols = allSymbols.slice(0, 10); // 상위 10개만 분석
+    const buy = [];
+    const sell = [];
+    const hold = [];
     const summaries = {};
 
-    for (const symbol of filteredSymbols) {
+    for (const sym of filteredSymbols) {
       try {
-        const candles = await fetchCandleData(symbol, frame, 100);
+        const candles = await fetchCandleData(sym, frame, 100);
         const closes = candles.map(c => c.close);
         if (closes.length < 30) continue;
 
@@ -38,19 +41,19 @@ function App() {
         const ema26 = calculateEMA(closes, 26).at(-1);
 
         const advice = getAdvice({ rsi, macdHist, emaShort: ema12, emaLong: ema26 });
-        const gpt = await getGPTAnalysis({
+        const gptText = await getGPTAnalysis({
           rsi: rsi.toFixed(2),
           macdHist: macdHist.toFixed(4),
           emaShort: ema12.toFixed(2),
           emaLong: ema26.toFixed(2)
         });
 
-        summaries[symbol] = gpt;
-        if (advice.recommendation === '매수') buy.push(symbol);
-        else if (advice.recommendation === '매도') sell.push(symbol);
-        else hold.push(symbol);
-      } catch (e) {
-        console.warn(symbol, '분석 실패', e);
+        summaries[sym] = gptText;
+        if (advice.recommendation === '매수') buy.push(sym);
+        else if (advice.recommendation === '매도') sell.push(sym);
+        else hold.push(sym);
+      } catch (err) {
+        console.warn(sym + ' 분석 실패:', err);
       }
     }
 
@@ -62,28 +65,38 @@ function App() {
   return (
     <div style={{ padding: 40, fontFamily: 'Arial' }}>
       <h1>📊 AI 트레이딩 신호 스캐너</h1>
+
       {/* 모드 선택 */}
       <div>
         <label style={{ marginRight: 12 }}>
-          <input type="radio" checked={mode==='short'} onChange={()=>{ setMode('short'); setFrame('5m'); }} /> 단기 매매
+          <input
+            type="radio"
+            checked={mode === 'short'}
+            onChange={() => { setMode('short'); setFrame('5m'); }}
+          /> 단기 매매
         </label>
         <label>
-          <input type="radio" checked={mode==='long'} onChange={()=>{ setMode('long'); setFrame('1h'); }} /> 장기 매매
+          <input
+            type="radio"
+            checked={mode === 'long'}
+            onChange={() => { setMode('long'); setFrame('1h'); }}
+          /> 장기 매매
         </label>
       </div>
+
       {/* 프레임 선택 */}
       <div style={{ marginTop: 12 }}>
         {TIMEFRAME_OPTIONS[mode].map(tf => (
           <label key={tf} style={{ marginRight: 12 }}>
             <input
               type="radio"
-              name="timeframe"
-              checked={frame===tf}
-              onChange={()=>setFrame(tf)}
+              checked={frame === tf}
+              onChange={() => setFrame(tf)}
             /> {tf}
           </label>
         ))}
       </div>
+
       {/* 분석 버튼 */}
       <div style={{ marginTop: 20 }}>
         <button onClick={loadSignals} disabled={loading}>
@@ -99,19 +112,30 @@ function App() {
         <p>⏸️ 관망: {signals.hold.length}</p>
       </div>
 
-      {/* 신호 리스트 및 GPT 요약 */}
-      {['매수','매도','관망'].map((type, idx) => {
-        const list = type==='매수'?signals.buy: type==='매도'?signals.sell: signals.hold;
-        const icon = type==='매수'?'📈': type==='매도'?'📉':'⏸️';
-        const color = type==='매수'?'green': type==='매도'?'red':'gray';
+      {/* 신호 리스트 */}
+      {['매수', '매도', '관망'].map((type, idx) => {
+        const list = type === '매수' ? signals.buy : type === '매도' ? signals.sell : signals.hold;
+        const icon = type === '매수' ? '📈' : type === '매도' ? '📉' : '⏸️';
+        const color = type === '매수' ? 'green' : type === '매도' ? 'red' : 'gray';
         return (
           <div key={idx} style={{ marginTop: 30 }}>
             <h2 style={{ color }}>{icon} {type} 신호</h2>
-            {list.length===0? <p>없음</p> : (
+            {list.length === 0 ? <p>없음</p> : (
               <ul>
                 {list.map(s => (
-                  <li key={s} style={{ cursor:'pointer', color }} onClick={()=>alert(gptSummaries[s]||'')}>
+                  <li
+                    key={s}
+                    style={{ cursor: 'pointer', color, marginBottom: 8 }}
+                    onClick={() => setSelectedSymbol(s)}
+                  >
                     {s}
+                    {selectedSymbol === s && gptSummaries[s] && (
+                      <div style={{ marginTop: 8, padding: 8, background: '#222', borderRadius: 4 }}>
+                        <pre style={{ whiteSpace: 'pre-wrap', color: '#fff' }}>
+                          {gptSummaries[s]}
+                        </pre>
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>
