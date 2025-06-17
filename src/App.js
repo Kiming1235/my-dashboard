@@ -12,9 +12,9 @@ const TIMEFRAME_OPTIONS = {
 };
 
 function App() {
-  const [mode, setMode] = useState('short');                // 단기/장기 모드
-  const [frame, setFrame] = useState('5m');                  // 선택된 시간 프레임
-  const [signals, setSignals] = useState({ buy: [], sell: [], hold: [] });
+  const [mode, setMode] = useState('short');                 // 단기/장기 모드
+  const [frame, setFrame] = useState('5m');                   // 선택된 시간 프레임
+  const [signals, setSignals] = useState({ long: [], short: [], hold: [] });
   const [gptSummaries, setGptSummaries] = useState({});
   const [loading, setLoading] = useState(false);
   const [selectedSymbol, setSelectedSymbol] = useState(null);
@@ -22,13 +22,11 @@ function App() {
   const loadSignals = async () => {
     setLoading(true);
     const allSymbols = await fetchAllSymbols();
-    const filteredSymbols = allSymbols.slice(0, 10);
-    const buy = [];
-    const sell = [];
-    const hold = [];
+    const filtered = allSymbols.slice(0, 10); // 상위 10개만
+    const longs = [], shorts = [], hold = [];
     const summaries = {};
 
-    for (const sym of filteredSymbols) {
+    for (const sym of filtered) {
       try {
         const candles = await fetchCandleData(sym, frame, 100);
         const closes = candles.map(c => c.close);
@@ -41,23 +39,23 @@ function App() {
         const ema26 = calculateEMA(closes, 26).at(-1);
 
         const advice = getAdvice({ rsi, macdHist, emaShort: ema12, emaLong: ema26 });
-        const gptText = await getGPTAnalysis({
+        const text   = await getGPTAnalysis({
           rsi: rsi.toFixed(2),
           macdHist: macdHist.toFixed(4),
           emaShort: ema12.toFixed(2),
           emaLong: ema26.toFixed(2)
         });
 
-        summaries[sym] = gptText;
-        if (advice.recommendation === '매수') buy.push(sym);
-        else if (advice.recommendation === '매도') sell.push(sym);
+        summaries[sym] = text;
+        if (advice.recommendation === '매수') longs.push(sym);
+        else if (advice.recommendation === '매도') shorts.push(sym);
         else hold.push(sym);
-      } catch (err) {
-        console.warn(sym + ' 분석 실패:', err);
+      } catch (e) {
+        console.warn(sym, '분석 실패', e);
       }
     }
 
-    setSignals({ buy, sell, hold });
+    setSignals({ long: longs, short: shorts, hold });
     setGptSummaries(summaries);
     setLoading(false);
   };
@@ -105,41 +103,63 @@ function App() {
       </div>
 
       {/* 통계 요약 */}
-      <div style={{ marginTop: 30, background: '#f2f2f2', padding: 10, borderRadius: 8, display: 'inline-block' }}>
-        <p>총 분석 종목: {signals.buy.length + signals.sell.length + signals.hold.length}</p>
-        <p>🟢 매수: {signals.buy.length}</p>
-        <p>🔴 매도: {signals.sell.length}</p>
+      <div style={{
+        marginTop: 30,
+        background: '#f2f2f2',
+        padding: 10,
+        borderRadius: 8,
+        display: 'inline-block'
+      }}>
+        <p>총 분석 종목: {signals.long.length + signals.short.length + signals.hold.length}</p>
+        <p>🟢 롱: {signals.long.length}</p>
+        <p>🔴 숏: {signals.short.length}</p>
         <p>⏸️ 관망: {signals.hold.length}</p>
       </div>
 
       {/* 신호 리스트 */}
-      {['매수', '매도', '관망'].map((type, idx) => {
-        const list = type === '매수' ? signals.buy : type === '매도' ? signals.sell : signals.hold;
-        const icon = type === '매수' ? '📈' : type === '매도' ? '📉' : '⏸️';
-        const color = type === '매수' ? 'green' : type === '매도' ? 'red' : 'gray';
+      {['롱', '숏', '관망'].map((type, idx) => {
+        const list = type === '롱' ? signals.long
+                     : type === '숏' ? signals.short
+                     : signals.hold;
+        const icon  = type === '롱' ? '📈'
+                    : type === '숏' ? '📉'
+                    : '⏸️';
+        const color = type === '롱' ? 'green'
+                    : type === '숏' ? 'red'
+                    : 'gray';
+
         return (
           <div key={idx} style={{ marginTop: 30 }}>
             <h2 style={{ color }}>{icon} {type} 신호</h2>
-            {list.length === 0 ? <p>없음</p> : (
-              <ul style={{ listStyle: 'none', padding: 0 }}>
-                {list.map(s => (
-                  <li
-                    key={s}
-                    style={{ cursor: 'pointer', color, margin: '8px 0' }}
-                    onClick={() => setSelectedSymbol(s)}
-                  >
-                    {s}
-                    {selectedSymbol === s && gptSummaries[s] && (
-                      <div style={{ margin: '8px auto', padding: '16px', background: '#222', borderRadius: '8px', maxWidth: '800px', textAlign: 'left', wordBreak: 'break-word' }}>
-                        <pre style={{ whiteSpace: 'pre-wrap', color: '#fff' }}>
-                          {gptSummaries[s]}
-                        </pre>
-                      </div>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
+            {list.length === 0
+              ? <p>없음</p>
+              : <ul style={{ listStyle: 'none', padding: 0 }}>
+                  {list.map(s => (
+                    <li
+                      key={s}
+                      style={{ cursor: 'pointer', color, margin: '8px 0' }}
+                      onClick={() => setSelectedSymbol(s)}
+                    >
+                      {s}
+                      {selectedSymbol === s && gptSummaries[s] && (
+                        <div style={{
+                          margin: '8px auto',
+                          padding: '16px',
+                          background: '#222',
+                          borderRadius: '8px',
+                          maxWidth: '800px',
+                          textAlign: 'left',
+                          wordBreak: 'break-word'
+                        }}>
+                          <pre style={{ whiteSpace: 'pre-wrap', color: '#fff' }}>
+                            {gptSummaries[s]}
+                          </pre>
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+            }
           </div>
         );
       })}
