@@ -17,12 +17,12 @@ function App() {
   const [signals, setSignals] = useState({ buy: [], sell: [], hold: [] });
   const [gptSummaries, setGptSummaries] = useState({});
   const [loading, setLoading] = useState(false);
-  const [selectedSymbol, setSelectedSymbol] = useState(null); // 인라인 표시할 심볼
+  const [selectedSymbol, setSelectedSymbol] = useState(null);
 
   const loadSignals = async () => {
     setLoading(true);
     const allSymbols = await fetchAllSymbols();
-    const filteredSymbols = allSymbols.slice(0, 10); // 상위 10개만 분석
+    const filteredSymbols = allSymbols.slice(0, 10);
     const buy = [];
     const sell = [];
     const hold = [];
@@ -63,19 +63,19 @@ function App() {
   };
 
   return (
-    <div style={{ padding: 40, fontFamily: 'Arial' }}>
+    <div style={{ padding: 40, fontFamily: 'Arial', textAlign: 'center' }}>
       <h1>📊 AI 트레이딩 신호 스캐너</h1>
 
       {/* 모드 선택 */}
       <div>
-        <label style={{ marginRight: 12 }}>
+        <label style={{ margin: '0 12px' }}>
           <input
             type="radio"
             checked={mode === 'short'}
             onChange={() => { setMode('short'); setFrame('5m'); }}
           /> 단기 매매
         </label>
-        <label>
+        <label style={{ margin: '0 12px' }}>
           <input
             type="radio"
             checked={mode === 'long'}
@@ -87,7 +87,7 @@ function App() {
       {/* 프레임 선택 */}
       <div style={{ marginTop: 12 }}>
         {TIMEFRAME_OPTIONS[mode].map(tf => (
-          <label key={tf} style={{ marginRight: 12 }}>
+          <label key={tf} style={{ margin: '0 8px' }}>
             <input
               type="radio"
               checked={frame === tf}
@@ -105,7 +105,7 @@ function App() {
       </div>
 
       {/* 통계 요약 */}
-      <div style={{ marginTop: 30, background: '#f2f2f2', padding: 10, borderRadius: 8 }}>
+      <div style={{ marginTop: 30, background: '#f2f2f2', padding: 10, borderRadius: 8, display: 'inline-block' }}>
         <p>총 분석 종목: {signals.buy.length + signals.sell.length + signals.hold.length}</p>
         <p>🟢 매수: {signals.buy.length}</p>
         <p>🔴 매도: {signals.sell.length}</p>
@@ -121,16 +121,16 @@ function App() {
           <div key={idx} style={{ marginTop: 30 }}>
             <h2 style={{ color }}>{icon} {type} 신호</h2>
             {list.length === 0 ? <p>없음</p> : (
-              <ul>
+              <ul style={{ listStyle: 'none', padding: 0 }}>
                 {list.map(s => (
                   <li
                     key={s}
-                    style={{ cursor: 'pointer', color, marginBottom: 8 }}
+                    style={{ cursor: 'pointer', color, margin: '8px 0' }}
                     onClick={() => setSelectedSymbol(s)}
                   >
                     {s}
                     {selectedSymbol === s && gptSummaries[s] && (
-                      <div style={{ marginTop: 8, padding: 8, background: '#222', borderRadius: 4 }}>
+                      <div style={{ marginTop: 8, padding: 8, background: '#222', borderRadius: 4, display: 'inline-block', textAlign: 'left' }}>
                         <pre style={{ whiteSpace: 'pre-wrap', color: '#fff' }}>
                           {gptSummaries[s]}
                         </pre>
