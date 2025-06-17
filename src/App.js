@@ -130,7 +130,7 @@ function App() {
                   >
                     {s}
                     {selectedSymbol === s && gptSummaries[s] && (
-                      <div style={{ marginTop: 8, padding: 8, background: '#222', borderRadius: 4, display: 'inline-block', textAlign: 'left' }}>
+                      <div style={{ margin: '8px auto', padding: '16px', background: '#222', borderRadius: '8px', maxWidth: '800px', textAlign: 'left', wordBreak: 'break-word' }}>
                         <pre style={{ whiteSpace: 'pre-wrap', color: '#fff' }}>
                           {gptSummaries[s]}
                         </pre>
