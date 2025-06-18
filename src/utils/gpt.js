@@ -1,34 +1,13 @@
 // src/utils/gpt.js
+const OPENAI_API_KEY = process.env.REACT_APP_OPENAI_API_KEY;
 
-const OPENAI_API_KEY = process.env.REACT_APP_OPENAI_API_KEY; // .env에 REACT_APP_OPENAI_API_KEY 설정 필요
-
-/**
- * GPT 분석 요청 함수
- * @param {string} symbol - 코인 심볼 (예: BTCUSDT)
- * @param {{ recentRsi: string|number[], recentMacd: string|number[], emaShort: string, emaLong: string, timeframe: string }} params
- * @returns {Promise<string>} GPT 응답 텍스트
- */
 export async function getGPTAnalysis(symbol, { recentRsi, recentMacd, emaShort, emaLong, timeframe }) {
-  // recentRsi/recentMacd가 배열 또는 문자열일 수 있으므로 안전하게 처리
-  const rsiList = Array.isArray(recentRsi)
-    ? recentRsi
-    : recentRsi
-      ? recentRsi.split(/\s*,\s*/)
-      : [];
-  const macdList = Array.isArray(recentMacd)
-    ? recentMacd
-    : recentMacd
-      ? recentMacd.split(/\s*,\s*/)
-      : [];
-  const count = rsiList.length;
-  const rsiText = rsiList.join(', ');
-  const macdText = macdList.join(', ');
-
+  // prompt 안에 symbol, timeframe, 배열 길이와 값들을 모두 포함
   const prompt = `
-아래는 ${symbol}의 ${timeframe}봉 기준 최근 ${count}개 구간 기술 지표 흐름입니다:
+아래는 ${symbol}의 ${timeframe}봉 기준 최근 기술 지표 흐름입니다:
 
-- RSI(최근 ${count}개): ${rsiText}
-- MACD 히스토그램(최근 ${count}개): ${macdText}
+- RSI (최근 ${recentRsi.split(', ').length}개): ${recentRsi}
+- MACD 히스토그램 (최근 ${recentMacd.split(', ').length}개): ${recentMacd}
 - EMA(12) 최신값: ${emaShort}
 - EMA(26) 최신값: ${emaLong}
 
@@ -49,11 +28,11 @@ export async function getGPTAnalysis(symbol, { recentRsi, recentMacd, emaShort, 
 - 마지막 문장은 반드시 다음 형식으로 끝낼 것: 판단: 롱 / 숏  , 관망은 최소한으로
 `.trim();
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      Authorization: `Bearer ${OPENAI_API_KEY}`
     },
     body: JSON.stringify({
       model: 'gpt-3.5-turbo',
@@ -62,15 +41,10 @@ export async function getGPTAnalysis(symbol, { recentRsi, recentMacd, emaShort, 
         { role: 'user', content: prompt }
       ],
       temperature: 0.7,
-      max_tokens: 350,
-    }),
+      max_tokens: 300
+    })
   });
 
-  const data = await response.json();
-  if (data?.choices?.[0]?.message?.content) {
-    return data.choices[0].message.content.trim();
-  }
-
-  console.error('GPT 응답 형식 오류:', data);
-  return 'GPT 분석 실패';
+  const { choices } = await res.json();
+  return choices?.[0]?.message?.content.trim() || 'GPT 분석 실패';
 }
