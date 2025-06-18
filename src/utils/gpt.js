@@ -45,6 +45,7 @@ export async function getGPTAnalysis(symbol, { recentRsi, recentMacd, emaShort, 
 - 길이는 3~5문장
 - 제목, 번호, 마크다운 사용 금지
 - 너무 신중하고 보수적이지 말것
+- 과거지표를 활용할것
 - 마지막 문장은 반드시 다음 형식으로 끝낼 것: 판단: 롱 / 숏  , 관망은 최소한으로
 `.trim();
 
