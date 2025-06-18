@@ -23,7 +23,7 @@ export async function getGPTAnalysis(symbol, { recentRsi, recentMacd, emaShort, 
 - 전문 용어는 간단히 풀어 설명
 - 숫자 값에 근거한 해석을 포함할 것
 - 강한 의견이 아닌 '경향' 중심의 표현
-- 문장 길이는 3~5줄, 핵심 설명 후 가독성을 위해 다음 줄에서 설명할 것
+- 문장 길이는 3~5줄
 - 제목, 번호, 마크다운 사용 금지
 - 너무 신중하고 보수적이지 말 것
 - 과거 지표를 활용할 것
