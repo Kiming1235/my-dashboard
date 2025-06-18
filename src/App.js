@@ -27,24 +27,20 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [selectedSymbol, setSelectedSymbol] = useState(null);
 
+  // 캔들+지표 로드 (상위 10개 심볼)
   const loadSignals = async () => {
     setLoading(true);
     const allSymbols = await fetchAllSymbols();
     const topSymbols = allSymbols.slice(0, 10);
-    const longs = [], shorts = [], hold = [];
     const newMetrics = {};
-    const summaries = {};
 
-    // 현재 프레임에 따른 추세 길이
     const len = TREND_LENGTHS[frame] || 5;
-
     for (const sym of topSymbols) {
       try {
         const candles = await fetchCandleData(sym, frame, 100);
         const closes = candles.map(c => c.close);
         if (closes.length < len + 1) continue;
 
-        // 지표 계산
         const rsiArr = calculateRSI(closes);
         const recentRsi = rsiArr.slice(-len);
         const { histogram } = calculateMACD(closes);
@@ -52,139 +48,100 @@ function App() {
         const ema12 = calculateEMA(closes, 12).at(-1);
         const ema26 = calculateEMA(closes, 26).at(-1);
 
-        newMetrics[sym] = {
-          recentRsi,
-          recentMacd,
-          emaShort: ema12,
-          emaLong: ema26
-        };
-
-        // GPT 분석 호출 (심볼, 프레임 포함)
-        const gptText = await getGPTAnalysis(sym, {
-          recentRsi: recentRsi.join(', '),
-          recentMacd: recentMacd.join(', '),
-          emaShort: ema12.toFixed(2),
-          emaLong: ema26.toFixed(2),
-          timeframe: frame
-        });
-        summaries[sym] = gptText;
-
-        // '판단: 롱/숏/관망' 파싱
-        const match = gptText.match(/판단:\s*(롱|숏|관망)/);
-        const decision = match ? match[1] : '관망';
-        if (decision === '롱') longs.push(sym);
-        else if (decision === '숏') shorts.push(sym);
-        else hold.push(sym);
-      } catch (e) {
-        console.warn(sym, '분석 실패', e);
+        newMetrics[sym] = { recentRsi, recentMacd, emaShort: ema12, emaLong: ema26 };
+      } catch (err) {
+        console.warn(sym, '지표 계산 실패:', err);
       }
     }
 
     setMetrics(newMetrics);
-    setSignals({ long: longs, short: shorts, hold });
-    setGptSummaries(summaries);
+    setSignals({ long: [], short: [], hold: [] });
     setLoading(false);
   };
 
-  const handleClick = (sym) => setSelectedSymbol(sym);
+  // 심볼 클릭 시 GPT 분석 호출 및 신호 분류 업데이트
+  const handleClick = async (sym) => {
+    setSelectedSymbol(sym);
+    const m = metrics[sym];
+    if (!m) return;
+    if (!gptSummaries[sym]) {
+      setGptSummaries(prev => ({ ...prev, [sym]: '분석 중...' }));
+      const { recentRsi, recentMacd, emaShort, emaLong } = m;
+      const text = await getGPTAnalysis(sym, {
+        recentRsi: recentRsi.join(', '),
+        recentMacd: recentMacd.join(', '),
+        emaShort: emaShort.toFixed(2),
+        emaLong: emaLong.toFixed(2),
+        timeframe: frame
+      });
+      setGptSummaries(prev => ({ ...prev, [sym]: text }));
+
+      const match = text.match(/판단:\s*(롱|숏|관망)/);
+      const decision = match ? match[1] : '관망';
+      setSignals(prev => {
+        const { long, short, hold } = prev;
+        // remove sym from all
+        const clean = {
+          long: long.filter(s=>s!==sym),
+          short: short.filter(s=>s!==sym),
+          hold: hold.filter(s=>s!==sym)
+        };
+        if (decision === '롱') clean.long.push(sym);
+        else if (decision === '숏') clean.short.push(sym);
+        else clean.hold.push(sym);
+        return clean;
+      });
+    }
+  };
 
   return (
-    <div style={{ padding: 40, fontFamily: 'Arial', textAlign: 'center' }}>
+    <div style={{ padding:40, fontFamily:'Arial', textAlign:'center' }}>
       <h1>📊 AI 트레이딩 신호 스캐너</h1>
 
-      {/* 모드 선택 */}
+      {/* 모드/프레임 선택 */}
       <div>
-        <label style={{ margin: '0 12px' }}>
-          <input
-            type="radio"
-            checked={mode === 'short'}
-            onChange={() => { setMode('short'); setFrame('5m'); }}
-          /> 단기 매매
-        </label>
-        <label style={{ margin: '0 12px' }}>
-          <input
-            type="radio"
-            checked={mode === 'long'}
-            onChange={() => { setMode('long'); setFrame('1h'); }}
-          /> 장기 매매
-        </label>
-      </div>
-
-      {/* 프레임 선택 */}
-      <div style={{ marginTop: 12 }}>
-        {TIMEFRAME_OPTIONS[mode].map(tf => (
-          <label key={tf} style={{ margin: '0 8px' }}>
+        {['short','long'].map(m=> (
+          <label key={m} style={{ margin:'0 12px' }}>
             <input
-              type="radio"
-              checked={frame === tf}
-              onChange={() => setFrame(tf)}
+              type='radio'
+              checked={mode===m}
+              onChange={()=>{setMode(m); setFrame(m==='short'?'5m':'1h');}}
+            /> {m==='short'?'단기':'장기'}
+          </label>
+        ))}
+      </div>
+      <div style={{ marginTop:12 }}>
+        {TIMEFRAME_OPTIONS[mode].map(tf=>(
+          <label key={tf} style={{ margin:'0 8px' }}>
+            <input
+              type='radio'
+              checked={frame===tf}
+              onChange={()=>setFrame(tf)}
             /> {tf}
           </label>
         ))}
       </div>
 
-      {/* 분석 버튼 */}
-      <div style={{ marginTop: 20 }}>
-        <button onClick={loadSignals} disabled={loading}>
-          {loading ? '분석 중...' : `🔍 ${frame} 신호 분석`}
-        </button>
-      </div>
-
-      {/* 통계 요약 */}
-      <div style={{
-        marginTop: 30,
-        background: '#f2f2f2',
-        padding: 10,
-        borderRadius: 8,
-        display: 'inline-block'
-      }}>
-        <p>총 분석 종목: {signals.long.length + signals.short.length + signals.hold.length}</p>
-        <p style={{ color: 'green' }}>🟢 롱: {signals.long.length}</p>
-        <p style={{ color: 'red' }}>🔴 숏: {signals.short.length}</p>
-        <p style={{ color: 'gray' }}>⏸️ 관망: {signals.hold.length}</p>
-      </div>
+      {/* 캔들+지표 로드 */}
+      <button onClick={loadSignals} disabled={loading} style={{ marginTop:20 }}>
+        {loading?'로딩...':'지표 로드'}
+      </button>
 
       {/* 신호 리스트 */}
-      {['롱', '숏', '관망'].map((type, idx) => {
-        const list = type === '롱' ? signals.long : type === '숏' ? signals.short : signals.hold;
-        const icon = type === '롱' ? '📈' : type === '숏' ? '📉' : '⏸️';
-        const color = type === '롱' ? 'green' : type === '숏' ? 'red' : 'gray';
-        return (
-          <div key={idx} style={{ marginTop: 30 }}>
-            <h2 style={{ color }}>{icon} {type} 신호</h2>
-            {list.length === 0 ? (
-              <p>없음</p>
-            ) : (
-              <ul style={{ listStyle: 'none', padding: 0 }}>
-                {list.map(s => (
-                  <li
-                    key={s}
-                    style={{ cursor: 'pointer', color, margin: '8px 0' }}
-                    onClick={() => handleClick(s)}
-                  >
-                    {s}
-                    {selectedSymbol === s && gptSummaries[s] && (
-                      <div style={{
-                        margin: '8px auto',
-                        padding: 16,
-                        background: '#222',
-                        borderRadius: 8,
-                        maxWidth: 800,
-                        textAlign: 'left',
-                        wordBreak: 'break-word'
-                      }}>
-                        <pre style={{ whiteSpace: 'pre-wrap', color: '#fff' }}>
-                          {gptSummaries[s]}
-                        </pre>
-                      </div>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        );
-      })}
+      {['롱','숏','관망'].map((type,idx)=>(
+        <div key={idx} style={{ marginTop:30 }}>
+          <h2>{type} 신호</h2>
+          <ul style={{ listStyle:'none', padding:0 }}>
+            {signals[type.toLowerCase()].length===0 && <li>없음</li>}
+            {signals[type.toLowerCase()].map(sym=>(
+              <li key={sym} style={{ cursor:'pointer', margin:'8px 0' }} onClick={()=>handleClick(sym)}>
+                {sym}
+                {selectedSymbol===sym && <pre style={{ textAlign:'left', margin:'8px auto', padding:16, background:'#222', color:'#fff', maxWidth:800 }}>{gptSummaries[sym]}</pre>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
     </div>
   );
 }
