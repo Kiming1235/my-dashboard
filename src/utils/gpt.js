@@ -1,18 +1,34 @@
 // src/utils/gpt.js
 
-const OPENAI_API_KEY = process.env.REACT_APP_OPENAI_API_KEY; // .env에 저장된 키 사용
+const OPENAI_API_KEY = process.env.REACT_APP_OPENAI_API_KEY; // .env에 REACT_APP_OPENAI_API_KEY 설정 필요
 
 /**
  * GPT 분석 요청 함수
- * @param {{ recentRsi: string, recentMacd: string, emaShort: string, emaLong: string }} params
- * @returns {Promise<string>}
+ * @param {string} symbol - 코인 심볼 (예: BTCUSDT)
+ * @param {{ recentRsi: string|number[], recentMacd: string|number[], emaShort: string, emaLong: string, timeframe: string }} params
+ * @returns {Promise<string>} GPT 응답 텍스트
  */
-export async function getGPTAnalysis({ recentRsi, recentMacd, emaShort, emaLong }) {
-  const prompt = `
-아래는 비트코인 ${recentRsi.split(', ').length}개 구간의 기술 지표 값입니다:
+export async function getGPTAnalysis(symbol, { recentRsi, recentMacd, emaShort, emaLong, timeframe }) {
+  // recentRsi/recentMacd가 배열 또는 문자열일 수 있으므로 안전하게 처리
+  const rsiList = Array.isArray(recentRsi)
+    ? recentRsi
+    : recentRsi
+      ? recentRsi.split(/\s*,\s*/)
+      : [];
+  const macdList = Array.isArray(recentMacd)
+    ? recentMacd
+    : recentMacd
+      ? recentMacd.split(/\s*,\s*/)
+      : [];
+  const count = rsiList.length;
+  const rsiText = rsiList.join(', ');
+  const macdText = macdList.join(', ');
 
-- RSI(최근 ${recentRsi.split(', ').length}개): ${recentRsi}
-- MACD 히스토그램(최근 ${recentMacd.split(', ').length}개): ${recentMacd}
+  const prompt = `
+아래는 ${symbol}의 ${timeframe}봉 기준 최근 ${count}개 구간 기술 지표 흐름입니다:
+
+- RSI(최근 ${count}개): ${rsiText}
+- MACD 히스토그램(최근 ${count}개): ${macdText}
 - EMA(12) 최신값: ${emaShort}
 - EMA(26) 최신값: ${emaLong}
 
@@ -45,14 +61,15 @@ export async function getGPTAnalysis({ recentRsi, recentMacd, emaShort, emaLong 
         { role: 'user', content: prompt }
       ],
       temperature: 0.7,
-      max_tokens: 300
+      max_tokens: 350,
     }),
   });
 
   const data = await response.json();
-  if (data.choices && data.choices[0]?.message?.content) {
+  if (data?.choices?.[0]?.message?.content) {
     return data.choices[0].message.content.trim();
   }
+
   console.error('GPT 응답 형식 오류:', data);
-  return 'GPT 분석에 실패했습니다.';
+  return 'GPT 분석 실패';
 }
