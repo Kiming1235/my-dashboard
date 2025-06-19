@@ -6,14 +6,17 @@ import { getGPTAnalysis } from './utils/gpt';
 
 // 모드별 & 프레임별 설정
 const TIMEFRAME_OPTIONS = {
-  short: ['1m','5m','15m','30m'],
-  long:  ['1h','4h','1d']
+  short: ['1m', '5m', '15m', '30m'],
+  long:  ['1h', '4h', '1d', '1w', '1M']
 };
+
+// 타임프레임별 추세 길이 설정
 const TREND_LENGTHS = {
-  '1m': 3, '5m': 3,
+  '1m': 3,  '5m': 3,
   '15m': 5, '30m': 5,
-  '1h': 7, '4h': 7,
-  '1d': 10
+  '1h': 7,  '4h': 7,
+  '1d': 10, '1w': 10,
+  '1M': 10
 };
 
 export default function App() {
@@ -45,7 +48,6 @@ export default function App() {
         const ema12 = calculateEMA(closes, 12).at(-1);
         const ema26 = calculateEMA(closes, 26).at(-1);
 
-        // GPT 호출
         const gptText = await getGPTAnalysis(sym, {
           recentRsi: recentRsi.join(', '),
           recentMacd: recentMacd.join(', '),
@@ -55,11 +57,10 @@ export default function App() {
         });
         summaries[sym] = gptText;
 
-        // 판단 파싱
         const m = gptText.match(/판단:\s*(롱|숏|관망)/);
-        const decision = m?.[1] || '관망';
-        if (decision === '롱') longs.push(sym);
-        else if (decision === '숏') shorts.push(sym);
+        const d = m ? m[1] : '관망';
+        if (d === '롱') longs.push(sym);
+        else if (d === '숏') shorts.push(sym);
         else hold.push(sym);
       } catch (e) {
         console.warn(sym, '분석 실패', e);
@@ -106,7 +107,7 @@ export default function App() {
         ))}
       </div>
 
-      {/* 신호 로드 버튼 (프레임 선택 바로 아래) */}
+      {/* 신호 로드 버튼 */}
       <div style={{ marginTop: 20 }}>
         <button onClick={loadSignals} disabled={loading}>
           {loading ? '분석 중...' : `🔍 ${frame} 신호 로드`}
@@ -129,19 +130,14 @@ export default function App() {
 
       {/* 신호 리스트 */}
       {['롱', '숏', '관망'].map((type, idx) => {
-        const list = type === '롱'
-          ? signals.long
-          : type === '숏'
-            ? signals.short
-            : signals.hold;
+        const list = type === '롱' ? signals.long : type === '숏' ? signals.short : signals.hold;
         const icon = type === '롱' ? '📈' : type === '숏' ? '📉' : '⏸️';
         const color = type === '롱' ? 'green' : type === '숏' ? 'red' : 'gray';
 
         return (
           <div key={idx} style={{ marginTop: 30 }}>
             <h2 style={{ color }}>{icon} {type} 신호</h2>
-            {!list.length && <p>없음</p>}
-            {!!list.length && (
+            {list.length === 0 ? <p>없음</p> : (
               <ul style={{ listStyle: 'none', padding: 0 }}>
                 {list.map(sym => (
                   <li
